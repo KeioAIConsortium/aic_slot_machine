@@ -1192,7 +1192,7 @@ input {
 
 .winner-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(190px, 12vw, 260px), 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: clamp(14px, 1.7vw, 24px);
   align-content: start;
   min-height: 0;
@@ -1200,6 +1200,18 @@ input {
   padding: clamp(22px, 4vw, 56px);
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+@media (max-width: 1180px) {
+  .winner-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  .winner-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .winner-summary-card {
@@ -1977,7 +1989,7 @@ input {
   }
 
   .winner-summary-grid {
-    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 18px;
   }
 
@@ -1993,6 +2005,12 @@ input {
     height: 28px;
     padding: 0 8px;
     font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .winner-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

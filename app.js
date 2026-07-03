@@ -1249,7 +1249,7 @@ function renderWinnerSummary() {
   elements.winnerSummaryGrid.replaceChildren();
   elements.winnerSummaryGrid.hidden = state.winners.length === 0;
 
-  state.winners.forEach((winner, index) => {
+  [...state.winners].reverse().forEach((winner, index) => {
     const card = document.createElement("div");
     const rank = document.createElement("span");
     const number = document.createElement("strong");
@@ -1257,7 +1257,7 @@ function renderWinnerSummary() {
     card.className = "winner-summary-card";
     rank.className = "winner-summary-rank";
     number.className = "winner-summary-number";
-    rank.textContent = `#${state.winners.length - index}`;
+    rank.textContent = `#${index + 1}`;
     number.textContent = winner.number;
     number.style.setProperty("--winner-number-size", getWinnerSummaryNumberSize(winner.number));
 
