@@ -1120,8 +1120,7 @@ function clearAll() {
   state.drawCount = 1;
   elements.ticketInput.value = "";
   syncDrawCountInput({ resetInput: true });
-  setSlotNumberText("---");
-  elements.drawLabel.textContent = "抽選待機中";
+  renderAppliedDrawLayout();
   localStorage.removeItem(STORAGE_KEY);
   setMessage("すべて初期化しました。");
   render();
@@ -1325,6 +1324,7 @@ function fitSlotNumber() {
 function setSlotNumberText(value) {
   const display = getSlotDisplayDigits(value);
   setSlotDigits(display, display.length);
+  fitSlotNumber();
 }
 
 function setSlotDigits(values, lockedCount = values.length, slamIndex = -1) {
