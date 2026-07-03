@@ -701,7 +701,7 @@ h2 {
 
 textarea {
   width: 100%;
-  min-height: 308px;
+  min-height: 248px;
   resize: vertical;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -739,6 +739,28 @@ input {
   color: var(--ink);
   padding: 0 11px;
   outline: none;
+}
+
+.draw-count-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 14px;
+}
+
+.draw-count-field {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.draw-count-field input {
+  margin-top: 8px;
+}
+
+.draw-count-row .secondary-button {
+  min-height: 42px;
+  white-space: nowrap;
 }
 
 .button-row,
@@ -2186,6 +2208,14 @@ input {
   letter-spacing: 0.18em;
 }
 
+.slot-machine.has-batch-slots {
+  padding-top: 48px;
+}
+
+.slot-machine.has-batch-slots .machine-arch {
+  display: none;
+}
+
 .bulb,
 .machine-light {
   background: radial-gradient(circle, #fff 0 24%, #fff0a6 25% 52%, #f0a21b 53% 100%);
@@ -2428,6 +2458,127 @@ input {
 .reel-number.digit-locking {
   width: auto;
   animation: none;
+}
+
+.reel-number.batch-winners {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-content: center;
+  justify-content: center;
+  justify-items: stretch;
+  align-items: stretch;
+  gap: clamp(8px, 1vw, 12px);
+  padding: clamp(10px, 1.5vw, 18px);
+  color: var(--keio-blue-dark);
+  font-family: inherit;
+  font-style: normal;
+  font-size: clamp(1.2rem, 1.8vw, 2.1rem);
+  text-shadow: none;
+  white-space: normal;
+  overflow: auto;
+}
+
+.reel-number.batch-winners.batch-count-2,
+.reel-number.batch-winners.batch-count-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.reel-number.batch-winners.batch-count-5 .batch-slot-machine:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+.reel-number.batch-winners.batch-count-5 .batch-slot-machine:nth-child(5) {
+  grid-column: 4 / span 2;
+}
+
+.batch-slot-machine {
+  position: relative;
+  display: grid;
+  grid-column: span 2;
+  grid-template-rows: auto minmax(58px, 1fr) auto;
+  gap: 6px;
+  min-width: 0;
+  min-height: clamp(132px, 18vw, 186px);
+  border: 4px solid #171417;
+  border-radius: 12px 12px 6px 6px;
+  background:
+    linear-gradient(180deg, rgba(244, 201, 93, 0.28), transparent 34%),
+    linear-gradient(180deg, #7b1521, #1a0d10 44%, #090808);
+  padding: 8px;
+  box-shadow:
+    inset 0 0 0 2px rgba(244, 201, 93, 0.54),
+    0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+.batch-slot-header,
+.batch-slot-footer {
+  display: grid;
+  place-items: center;
+  min-height: 22px;
+  color: #ffe49a;
+  font-size: clamp(0.58rem, 0.8vw, 0.76rem);
+  font-family: Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", Meiryo, sans-serif;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(244, 201, 93, 0.68);
+}
+
+.batch-slot-header {
+  min-height: 34px;
+  border: 2px solid #151515;
+  border-radius: 28px 28px 6px 6px / 20px 20px 6px 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 243, 185, 0.42), transparent 42%),
+    linear-gradient(180deg, #d8901e, #6f2218 62%, #1a1010);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 228, 154, 0.72),
+    0 4px 10px rgba(0, 0, 0, 0.28);
+}
+
+.batch-slot-number {
+  display: grid;
+  grid-template-columns: repeat(var(--batch-digit-count, 3), minmax(0, 1fr));
+  place-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  color: #e9162e;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 950;
+  line-height: 0.95;
+  overflow: hidden;
+  padding: 0;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-slot-digit {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 58px;
+  border: 3px solid #202020;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 13% 87%, rgba(0, 0, 0, 0.16)),
+    linear-gradient(180deg, #fdfdf7 0%, #d9dce1 42%, #ffffff 50%, #bec4cc 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 211, 0.8);
+}
+
+.batch-slot-machine.is-spinning .batch-slot-digit.is-rolling {
+  color: var(--keio-red);
+  filter: blur(0.7px);
+  animation: reelShake 0.08s linear infinite;
+}
+
+.batch-slot-digit.is-slam {
+  color: #e9162e;
+  animation: digitSlam 0.22s cubic-bezier(0.12, 0.9, 0.18, 1.28) both;
 }
 
 .reel-digit {
@@ -2708,6 +2859,10 @@ input {
     border-radius: 82px 82px 16px 16px / 58px 58px 16px 16px;
   }
 
+  .slot-machine.has-batch-slots {
+    padding-top: 28px;
+  }
+
   .reel-window {
     grid-template-columns: minmax(0, 1fr);
     width: min(260px, calc(100% - 44px));
@@ -2756,6 +2911,44 @@ input {
   .reel-number {
     gap: 4px;
     --reel-max-size: 4.3rem;
+  }
+
+  .reel-number.batch-winners {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 7px;
+    padding: 8px;
+    font-size: 1.05rem;
+  }
+
+  .reel-number.batch-winners.batch-count-2,
+  .reel-number.batch-winners.batch-count-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .batch-slot-machine {
+    grid-template-rows: auto minmax(44px, 1fr) auto;
+    min-height: 108px;
+    border-width: 3px;
+    padding: 6px;
+  }
+
+  .batch-slot-header,
+  .batch-slot-footer {
+    min-height: 18px;
+    font-size: 0.54rem;
+  }
+
+  .batch-slot-header {
+    min-height: 28px;
+  }
+
+  .batch-slot-number {
+    gap: 3px;
+  }
+
+  .batch-slot-digit {
+    min-height: 44px;
+    border-width: 2px;
   }
 
   .reel-digit {

@@ -5,15 +5,20 @@ const COIN_SOUND_MS = 430;
 const DIGIT_LOCK_TICK_MS = 48;
 const DIGIT_LOCK_STEP_MS = 360;
 const DIGIT_LOCK_START_DELAY_MS = 220;
+const BATCH_DIGIT_LOCK_STEP_MS = 170;
+const BATCH_MACHINE_LOCK_STEP_MS = 90;
 const IMPACT_EFFECT_MS = 1700;
 const ANTHEM_VOLUME = 0.56;
 const SFX_MASTER_GAIN = 1.55;
 const DEFAULT_ANTHEM_SRC = "wakakichi.mp3";
+const MAX_DRAW_COUNT = 5;
 
 const elements = {
   ticketInput: document.querySelector("#ticketInput"),
   rangeStart: document.querySelector("#rangeStart"),
   rangeEnd: document.querySelector("#rangeEnd"),
+  drawCount: document.querySelector("#drawCount"),
+  drawCountApplyButton: document.querySelector("#drawCountApplyButton"),
   addRangeButton: document.querySelector("#addRangeButton"),
   applyButton: document.querySelector("#applyButton"),
   sampleButton: document.querySelector("#sampleButton"),
@@ -41,12 +46,14 @@ const elements = {
   winnerSummaryCloseButton: document.querySelector("#winnerSummaryCloseButton"),
   winnerSummaryGrid: document.querySelector("#winnerSummaryGrid"),
   fxLayer: document.querySelector("#slotFxLayer"),
+  slotMachine: document.querySelector(".slot-machine"),
 };
 
 const state = {
   tickets: [],
   winners: [],
   sourceText: "",
+  drawCount: 1,
   spinning: false,
   resolving: false,
   spinTimer: 0,
@@ -80,6 +87,7 @@ function loadState() {
         drawnAt: entry.drawnAt || new Date().toISOString(),
       }));
     state.sourceText = typeof saved.sourceText === "string" ? saved.sourceText : state.tickets.join("\n");
+    state.drawCount = normalizeDrawCount(saved.drawCount, Math.max(1, getRemainingTickets().length || state.tickets.length || 1));
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -92,6 +100,7 @@ function saveState() {
       tickets: state.tickets,
       winners: state.winners,
       sourceText: state.sourceText,
+      drawCount: state.drawCount,
     }),
   );
 }
@@ -163,6 +172,78 @@ function getRandomInt(max) {
 
 function chooseTicket(candidates) {
   return candidates[getRandomInt(candidates.length)];
+}
+
+function chooseTickets(candidates, count) {
+  const pool = [...candidates];
+  const winners = [];
+  const drawTotal = Math.min(count, pool.length);
+
+  for (let index = 0; index < drawTotal; index += 1) {
+    const winnerIndex = getRandomInt(pool.length);
+    const [winner] = pool.splice(winnerIndex, 1);
+    winners.push(winner);
+  }
+
+  return winners;
+}
+
+function normalizeDrawCount(value, max = Number.POSITIVE_INFINITY) {
+  const parsed = Number.parseInt(String(value), 10);
+  const fallback = Number.isFinite(parsed) ? parsed : 1;
+  const cappedMax = Number.isFinite(max) ? Math.max(1, Math.min(MAX_DRAW_COUNT, max)) : MAX_DRAW_COUNT;
+
+  return Math.min(Math.max(1, fallback), cappedMax);
+}
+
+function syncDrawCountInput({ save = false, commit = false, resetInput = false } = {}) {
+  const remaining = getRemainingTickets();
+  const max = Math.min(MAX_DRAW_COUNT, Math.max(1, remaining.length));
+
+  state.drawCount = normalizeDrawCount(commit ? elements.drawCount.value : state.drawCount, max);
+  elements.drawCount.max = String(max);
+
+  if (commit || resetInput) {
+    elements.drawCount.value = String(state.drawCount);
+  } else {
+    const inputValue = normalizeDrawCount(elements.drawCount.value || state.drawCount, max);
+    if (document.activeElement !== elements.drawCount && String(inputValue) !== elements.drawCount.value) {
+      elements.drawCount.value = String(inputValue);
+    }
+  }
+
+  if (save) {
+    saveState();
+  }
+}
+
+function applyDrawCount() {
+  if (state.spinning) {
+    return;
+  }
+
+  syncDrawCountInput({ save: true, commit: true, resetInput: true });
+  renderAppliedDrawLayout();
+  renderButtons();
+  setMessage(`スロット台数を${state.drawCount}台にしました。`);
+}
+
+function renderAppliedDrawLayout() {
+  clearDigitLockTimers();
+  cancelSpinEffects();
+  window.clearTimeout(state.winnerShowcaseTimer);
+  elements.reelWindow.classList.remove("is-spinning", "is-locking", "is-winner");
+  elements.slotNumber.classList.remove("spinning", "digit-locking", "winner", "winner-showcase");
+
+  if (state.drawCount > 1) {
+    renderBatchSlotMachines(state.drawCount, () => "---", { spinning: false, winners: false });
+    elements.drawLabel.textContent = `抽選待機中 ${state.drawCount}台`;
+  } else {
+    setSlotNumberText("---");
+    elements.drawLabel.textContent = "抽選待機中";
+  }
+
+  fitSlotNumber();
 }
 
 function getAudioContext() {
@@ -708,6 +789,7 @@ function applyTickets({ silent = false } = {}) {
   state.sourceText = parsed.join("\n");
   state.winners = state.winners.filter((winner) => parsed.includes(winner.number));
   elements.ticketInput.value = state.sourceText;
+  syncDrawCountInput();
 
   if (!silent) {
     setMessage(parsed.length ? `${parsed.length}件の整理券番号を登録しました。` : "番号を入力してください。", parsed.length === 0);
@@ -770,13 +852,17 @@ function startSpin() {
     return;
   }
 
+  syncDrawCountInput({ save: true, resetInput: true });
   state.spinning = true;
   state.resolving = false;
   clearDigitLockTimers();
   window.clearTimeout(state.winnerShowcaseTimer);
+  elements.slotNumber.classList.remove("batch-winners");
+  elements.slotNumber.classList.remove("batch-count-2", "batch-count-3", "batch-count-4", "batch-count-5");
+  elements.slotMachine.classList.remove("has-batch-slots");
   elements.reelWindow.classList.remove("is-winner");
   elements.reelWindow.classList.add("is-spinning");
-  elements.slotNumber.classList.remove("winner", "winner-showcase");
+  elements.slotNumber.classList.remove("winner", "winner-showcase", "batch-winners");
   elements.slotNumber.classList.add("spinning");
   elements.drawLabel.textContent = "抽選中";
   elements.drawButtonLabel.textContent = "決定";
@@ -784,7 +870,16 @@ function startSpin() {
   renderButtons();
   startSpinEffects();
 
+  if (state.drawCount > 1) {
+    renderBatchSlotMachines(state.drawCount, (index) => chooseTicket(remaining), { spinning: true });
+  }
+
   state.spinTimer = window.setInterval(() => {
+    if (state.drawCount > 1) {
+      updateBatchSlotMachines((index) => chooseTicket(remaining), { spinning: true });
+      return;
+    }
+
     setSlotNumberText(chooseTicket(remaining));
     fitSlotNumber();
   }, SPIN_TICK_MS);
@@ -807,19 +902,85 @@ function stopSpin() {
     return;
   }
 
-  const winner = chooseTicket(remaining);
-  startDigitLockReveal(winner);
+  const winners = chooseTickets(remaining, state.drawCount);
+  if (winners.length > 1) {
+    finishBatchReveal(winners);
+    return;
+  }
+
+  startDigitLockReveal(winners);
 }
 
-function startDigitLockReveal(winner) {
-  const digits = getSlotDisplayDigits(winner);
+function finishBatchReveal(winners) {
+  const winnerList = Array.isArray(winners) ? winners : [winners];
+
+  state.resolving = true;
+  elements.reelWindow.classList.add("is-spinning", "is-locking");
+  elements.reelWindow.classList.remove("is-winner");
+  elements.slotNumber.classList.remove("winner", "winner-showcase");
+  elements.drawLabel.textContent = "確定中";
+  elements.drawButtonLabel.textContent = "確定中";
+  renderButtons();
+
+  startBatchDigitLockReveal(winnerList);
+}
+
+function startBatchDigitLockReveal(winners) {
+  const winnerDigits = winners.map(getSlotDisplayDigits);
+  const lockState = winnerDigits.map(() => 0);
+  const maxDigits = Math.max(...winnerDigits.map((digits) => digits.length));
+
+  renderBatchSlotMachines(winners.length, (index) => winners[index], {
+    spinning: true,
+    winners: false,
+    lockedCounts: lockState,
+    finalDigits: winnerDigits,
+  });
+
+  state.digitLockTimer = window.setInterval(() => {
+    updateBatchSlotMachines((index) => winners[index], {
+      spinning: true,
+      winners: false,
+      lockedCounts: lockState,
+      finalDigits: winnerDigits,
+    });
+  }, DIGIT_LOCK_TICK_MS);
+
+  winners.forEach((winner, machineIndex) => {
+    for (let digitIndex = 0; digitIndex < winnerDigits[machineIndex].length; digitIndex += 1) {
+      const timeout = window.setTimeout(() => {
+        lockState[machineIndex] = Math.min(digitIndex + 1, winnerDigits[machineIndex].length);
+        updateBatchSlotMachines((index) => winners[index], {
+          spinning: true,
+          winners: false,
+          lockedCounts: lockState,
+          finalDigits: winnerDigits,
+          slam: { machineIndex, digitIndex },
+        });
+        playDigitLockSound(digitIndex);
+
+        const allLocked = lockState.every((count, index) => count >= winnerDigits[index].length);
+        if (allLocked) {
+          finishDigitLockReveal(winners);
+        }
+      }, DIGIT_LOCK_START_DELAY_MS + machineIndex * BATCH_MACHINE_LOCK_STEP_MS + digitIndex * BATCH_DIGIT_LOCK_STEP_MS);
+
+      state.digitLockTimeouts.push(timeout);
+    }
+  });
+}
+
+function startDigitLockReveal(winners) {
+  const winnerList = Array.isArray(winners) ? winners : [winners];
+  const representativeWinner = winnerList[0];
+  const digits = getSlotDisplayDigits(representativeWinner);
   let lockedCount = 0;
 
   state.resolving = true;
   clearDigitLockTimers();
   elements.reelWindow.classList.add("is-spinning", "is-locking");
   elements.reelWindow.classList.remove("is-winner");
-  elements.slotNumber.classList.remove("winner", "winner-showcase");
+  elements.slotNumber.classList.remove("winner", "winner-showcase", "batch-winners");
   elements.slotNumber.classList.add("spinning", "digit-locking");
   elements.drawLabel.textContent = "確定中";
   elements.drawButtonLabel.textContent = "確定中";
@@ -847,7 +1008,7 @@ function startDigitLockReveal(winner) {
       playDigitLockSound(index);
 
       if (lockedCount === digits.length) {
-        finishDigitLockReveal(winner);
+        finishDigitLockReveal(winnerList);
       }
     }, DIGIT_LOCK_START_DELAY_MS + index * DIGIT_LOCK_STEP_MS);
 
@@ -855,18 +1016,27 @@ function startDigitLockReveal(winner) {
   });
 }
 
-function finishDigitLockReveal(winner) {
+function finishDigitLockReveal(winners) {
+  const winnerList = Array.isArray(winners) ? winners : [winners];
+  const drawnAt = new Date().toISOString();
+
   clearDigitLockTimers();
   state.spinning = false;
   state.resolving = false;
 
-  state.winners.unshift({
-    number: winner,
-    drawnAt: new Date().toISOString(),
-  });
+  state.winners.unshift(
+    ...winnerList.map((winner) => ({
+      number: winner,
+      drawnAt,
+    })),
+  );
 
-  const winnerDigits = getSlotDisplayDigits(winner);
-  setSlotDigits(winnerDigits, winnerDigits.length);
+  if (winnerList.length === 1) {
+    const winnerDigits = getSlotDisplayDigits(winnerList[0]);
+    setSlotDigits(winnerDigits, winnerDigits.length);
+  } else {
+    setBatchWinnerDisplay(winnerList);
+  }
   window.clearTimeout(state.winnerShowcaseTimer);
   elements.reelWindow.classList.remove("is-spinning", "is-locking", "is-winner");
   void elements.reelWindow.offsetWidth;
@@ -878,8 +1048,12 @@ function finishDigitLockReveal(winner) {
     elements.slotNumber.classList.remove("winner-showcase");
     elements.reelWindow.classList.remove("is-winner");
   }, 1180);
-  elements.drawLabel.textContent = `当選番号 ${winner}`;
-  setMessage(`${winner} を当選番号に追加しました。`);
+  elements.drawLabel.textContent = winnerList.length === 1 ? `当選番号 ${winnerList[0]}` : `当選番号 ${winnerList.length}件`;
+  setMessage(
+    winnerList.length === 1
+      ? `${winnerList[0]} を当選番号に追加しました。`
+      : `${winnerList.length}件を当選番号に追加しました。`,
+  );
   saveState();
   render();
   fitSlotNumber();
@@ -924,8 +1098,7 @@ function clearHistory() {
   }
 
   state.winners = [];
-  setSlotNumberText("---");
-  elements.drawLabel.textContent = "抽選待機中";
+  renderAppliedDrawLayout();
   setMessage("当選履歴をクリアしました。");
   saveState();
   render();
@@ -944,7 +1117,9 @@ function clearAll() {
   state.tickets = [];
   state.winners = [];
   state.sourceText = "";
+  state.drawCount = 1;
   elements.ticketInput.value = "";
+  syncDrawCountInput({ resetInput: true });
   setSlotNumberText("---");
   elements.drawLabel.textContent = "抽選待機中";
   localStorage.removeItem(STORAGE_KEY);
@@ -1009,6 +1184,7 @@ function setMessage(text, isError = false) {
 }
 
 function render() {
+  syncDrawCountInput();
   renderButtons();
   renderWinners();
   if (!elements.winnerSummaryModal.hidden) {
@@ -1034,6 +1210,8 @@ function renderButtons() {
   elements.addRangeButton.disabled = state.spinning;
   elements.sampleButton.disabled = state.spinning;
   elements.clearAllButton.disabled = state.spinning;
+  elements.drawCount.disabled = state.spinning;
+  elements.drawCountApplyButton.disabled = state.spinning;
   const anthemReady = Boolean(state.anthemAudio);
   const anthemPlaying = anthemReady && !state.anthemAudio.paused && !state.anthemManuallyStopped;
 
@@ -1122,6 +1300,12 @@ function formatDateTime(value) {
 }
 
 function fitSlotNumber() {
+  if (elements.slotNumber.classList.contains("batch-winners")) {
+    elements.slotNumber.style.setProperty("--reel-size", "2.4rem");
+    elements.slotNumber.style.setProperty("--slot-digit-count", "1");
+    return;
+  }
+
   const value = elements.slotNumber.textContent || "";
   const length = value.length;
   let size = "12rem";
@@ -1144,7 +1328,14 @@ function setSlotNumberText(value) {
 }
 
 function setSlotDigits(values, lockedCount = values.length, slamIndex = -1) {
-  if (elements.slotNumber.children.length !== values.length) {
+  const shouldReplace = elements.slotNumber.classList.contains("batch-winners") || elements.slotNumber.children.length !== values.length;
+
+  elements.slotNumber.classList.remove("batch-winners");
+  elements.slotNumber.classList.remove("batch-count-2", "batch-count-3", "batch-count-4", "batch-count-5");
+  elements.slotNumber.classList.remove("is-spinning", "is-winner");
+  elements.slotMachine.classList.remove("has-batch-slots");
+
+  if (shouldReplace) {
     const fragment = document.createDocumentFragment();
     values.forEach(() => {
       const digit = document.createElement("span");
@@ -1158,6 +1349,123 @@ function setSlotDigits(values, lockedCount = values.length, slamIndex = -1) {
     const digit = elements.slotNumber.children[index];
     digit.textContent = value;
     digit.classList.add("reel-digit");
+    digit.classList.toggle("is-locked", index < lockedCount);
+    digit.classList.toggle("is-rolling", index >= lockedCount);
+
+    if (index >= lockedCount) {
+      digit.classList.remove("is-slam");
+    }
+
+    if (index === slamIndex) {
+      digit.classList.remove("is-slam");
+      void digit.offsetWidth;
+      digit.classList.add("is-slam");
+    }
+  });
+}
+
+function setBatchWinnerDisplay(winners) {
+  renderBatchSlotMachines(winners.length, (index) => winners[index], { spinning: false, winners: true });
+}
+
+function renderBatchSlotMachines(
+  count,
+  getValue,
+  { spinning = false, winners = false, lockedCounts = [], finalDigits = null, slam = null } = {},
+) {
+  const fragment = document.createDocumentFragment();
+  const machineCount = normalizeDrawCount(count);
+
+  for (let index = 0; index < machineCount; index += 1) {
+    const machine = document.createElement("span");
+    const header = document.createElement("span");
+    const reel = document.createElement("strong");
+    const footer = document.createElement("span");
+
+    machine.className = "batch-slot-machine";
+    machine.classList.toggle("is-spinning", spinning);
+    machine.classList.toggle("is-winner", winners);
+    header.className = "batch-slot-header";
+    reel.className = "batch-slot-number";
+    footer.className = "batch-slot-footer";
+    header.textContent = "AIC SLOTS";
+    footer.textContent = winners ? "WINNER" : spinning ? "DRAWING" : "READY";
+    setBatchSlotDigits(reel, getBatchSlotDigits(index, getValue(index), { lockedCounts, finalDigits }), {
+      lockedCount: lockedCounts[index] ?? (spinning ? 0 : getSlotDisplayDigits(getValue(index)).length),
+      slamIndex: slam?.machineIndex === index ? slam.digitIndex : -1,
+    });
+
+    machine.append(header, reel, footer);
+    fragment.append(machine);
+  }
+
+  elements.slotNumber.replaceChildren(fragment);
+  elements.slotNumber.classList.add("batch-winners");
+  elements.slotNumber.classList.remove("batch-count-2", "batch-count-3", "batch-count-4", "batch-count-5");
+  elements.slotNumber.classList.add(`batch-count-${machineCount}`);
+  elements.slotNumber.classList.toggle("is-spinning", spinning);
+  elements.slotNumber.classList.toggle("is-winner", winners);
+  elements.slotMachine.classList.add("has-batch-slots");
+  fitSlotNumber();
+}
+
+function updateBatchSlotMachines(
+  getValue,
+  { spinning = false, winners = false, lockedCounts = [], finalDigits = null, slam = null } = {},
+) {
+  const machines = [...elements.slotNumber.querySelectorAll(".batch-slot-machine")];
+
+  machines.forEach((machine, index) => {
+    const number = machine.querySelector(".batch-slot-number");
+    const footer = machine.querySelector(".batch-slot-footer");
+
+    if (number) {
+      setBatchSlotDigits(number, getBatchSlotDigits(index, getValue(index), { lockedCounts, finalDigits }), {
+        lockedCount: lockedCounts[index] ?? (spinning ? 0 : getSlotDisplayDigits(getValue(index)).length),
+        slamIndex: slam?.machineIndex === index ? slam.digitIndex : -1,
+      });
+    }
+    if (footer) {
+      footer.textContent = winners ? "WINNER" : spinning ? "DRAWING" : "READY";
+    }
+    machine.classList.toggle("is-spinning", spinning);
+    machine.classList.toggle("is-winner", winners);
+  });
+
+  elements.slotNumber.classList.toggle("is-spinning", spinning);
+  elements.slotNumber.classList.toggle("is-winner", winners);
+}
+
+function getBatchSlotDigits(index, value, { lockedCounts = [], finalDigits = null } = {}) {
+  const digits = finalDigits?.[index] || getSlotDisplayDigits(value);
+  const lockedCount = lockedCounts[index] ?? digits.length;
+
+  return digits.map((digit, digitIndex) => {
+    if (digitIndex < lockedCount || !finalDigits) {
+      return digit;
+    }
+
+    return /^\d$/.test(digit) ? String(getRandomInt(10)) : digit;
+  });
+}
+
+function setBatchSlotDigits(container, digits, { lockedCount = digits.length, slamIndex = -1 } = {}) {
+  container.style.setProperty("--batch-digit-count", String(Math.max(3, digits.length)));
+
+  if (container.children.length !== digits.length) {
+    const fragment = document.createDocumentFragment();
+    digits.forEach(() => {
+      const digit = document.createElement("span");
+      digit.className = "batch-slot-digit";
+      fragment.append(digit);
+    });
+    container.replaceChildren(fragment);
+  }
+
+  digits.forEach((value, index) => {
+    const digit = container.children[index];
+    digit.textContent = value;
+    digit.classList.add("batch-slot-digit");
     digit.classList.toggle("is-locked", index < lockedCount);
     digit.classList.toggle("is-rolling", index >= lockedCount);
 
@@ -1207,6 +1515,8 @@ function bindEvents() {
   elements.anthemInput.addEventListener("change", setAnthemAudio);
   elements.clearHistoryButton.addEventListener("click", clearHistory);
   elements.clearAllButton.addEventListener("click", clearAll);
+  elements.drawCountApplyButton.addEventListener("click", applyDrawCount);
+  elements.drawCount.addEventListener("change", () => syncDrawCountInput());
 
   elements.ticketInput.addEventListener("blur", () => {
     if (elements.ticketInput.value !== state.sourceText) {
@@ -1227,9 +1537,14 @@ function init() {
   loadState();
   loadDefaultAnthemAudio();
   elements.ticketInput.value = state.sourceText;
+  elements.drawCount.value = String(state.drawCount);
+  syncDrawCountInput({ resetInput: true });
   const lastWinner = state.winners[0]?.number;
   setSlotNumberText(lastWinner || "---");
   elements.drawLabel.textContent = lastWinner ? `前回の当選番号 ${lastWinner}` : "抽選待機中";
+  if (!lastWinner && state.drawCount > 1) {
+    renderAppliedDrawLayout();
+  }
   bindEvents();
   render();
   fitSlotNumber();
