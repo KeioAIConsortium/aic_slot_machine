@@ -207,7 +207,7 @@ function syncDrawCountInput({ save = false, commit = false, resetInput = false }
     elements.drawCount.value = String(state.drawCount);
   } else {
     const inputValue = normalizeDrawCount(elements.drawCount.value || state.drawCount, max);
-    if (String(inputValue) !== elements.drawCount.value && Number(elements.drawCount.value) > max) {
+    if (document.activeElement !== elements.drawCount && String(inputValue) !== elements.drawCount.value) {
       elements.drawCount.value = String(inputValue);
     }
   }
