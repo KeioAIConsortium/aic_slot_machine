@@ -222,6 +222,11 @@ function applyDrawCount() {
     return;
   }
 
+  if (getRemainingTickets().length === 0) {
+    setOrderMessage();
+    return;
+  }
+
   syncDrawCountInput({ save: true, commit: true, resetInput: true });
   renderAppliedDrawLayout();
   renderButtons();
@@ -792,7 +797,10 @@ function applyTickets({ silent = false } = {}) {
   syncDrawCountInput();
 
   if (!silent) {
-    setMessage(parsed.length ? `${parsed.length}件の整理券番号を登録しました。` : "番号を入力してください。", parsed.length === 0);
+    setMessage(
+      parsed.length ? `${parsed.length}件の整理券番号を登録しました。` : "整理券番号を入力するか、開始・終了を指定して「範囲追加」を押してください。",
+      parsed.length === 0,
+    );
   }
 
   saveState();
@@ -804,6 +812,11 @@ function addRange() {
   const endRaw = elements.rangeEnd.value.trim();
   const start = Number(startRaw);
   const end = Number(endRaw);
+
+  if (!startRaw || !endRaw) {
+    setMessage("開始番号と終了番号を入力してから「範囲追加」を押してください。", true);
+    return;
+  }
 
   if (!/^\d+$/.test(startRaw) || !/^\d+$/.test(endRaw) || !Number.isFinite(start) || !Number.isFinite(end)) {
     setMessage("開始と終了には数字だけを入力してください。", true);
@@ -848,7 +861,7 @@ function startSpin() {
   }
 
   if (remaining.length === 0) {
-    setMessage(state.tickets.length ? "抽選できる番号が残っていません。" : "先に整理券番号を登録してください。", true);
+    setMessage(state.tickets.length ? "抽選できる番号が残っていません。" : "先に整理券番号を登録してください。開始・終了を指定して「範囲追加」を押すとまとめて登録できます。", true);
     return;
   }
 
@@ -1180,6 +1193,10 @@ function setSample() {
 function setMessage(text, isError = false) {
   elements.inputMessage.textContent = text;
   elements.inputMessage.classList.toggle("error", Boolean(isError));
+}
+
+function setOrderMessage() {
+  setMessage("先に整理券番号を登録してください。開始・終了を指定して「範囲追加」を押すと、その後に一回の当選数を設定できます。", true);
 }
 
 function render() {
@@ -1516,7 +1533,26 @@ function bindEvents() {
   elements.clearHistoryButton.addEventListener("click", clearHistory);
   elements.clearAllButton.addEventListener("click", clearAll);
   elements.drawCountApplyButton.addEventListener("click", applyDrawCount);
-  elements.drawCount.addEventListener("change", () => syncDrawCountInput());
+  elements.drawCount.addEventListener("focus", () => {
+    if (getRemainingTickets().length === 0) {
+      setOrderMessage();
+    }
+  });
+  elements.drawCount.addEventListener("input", () => {
+    if (getRemainingTickets().length === 0) {
+      setOrderMessage();
+      syncDrawCountInput({ resetInput: true });
+    }
+  });
+  elements.drawCount.addEventListener("change", () => {
+    if (getRemainingTickets().length === 0) {
+      setOrderMessage();
+      syncDrawCountInput({ resetInput: true });
+      return;
+    }
+
+    syncDrawCountInput();
+  });
 
   elements.ticketInput.addEventListener("blur", () => {
     if (elements.ticketInput.value !== state.sourceText) {
