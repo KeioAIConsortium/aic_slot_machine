@@ -3082,13 +3082,17 @@ input {
     gap: clamp(6px, 1.4vh, 14px);
     min-height: 0;
     padding-top: var(--machine-pad-top);
-    /* clears the inner gold frame (inset 28px) so the JACKPOT sign sits just above it */
-    padding-bottom: 40px;
+    /* JACKPOT sign sits just above the inner gold frame, with no empty band below it */
+    padding-bottom: 24px;
+  }
+
+  .slot-machine::before {
+    bottom: 12px;
   }
 
   .slot-machine.has-batch-slots {
     padding-top: clamp(20px, 4vh, 48px);
-    padding-bottom: 40px;
+    padding-bottom: 24px;
   }
 
   .machine-arch {
